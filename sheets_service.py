@@ -242,7 +242,7 @@ class SheetsService:
         }
 
         try:
-            # Append the row to the sheet
+            # Append the row to the primary sheet
             self.sheet.values().append(
                 spreadsheetId=self.spreadsheet_id,
                 range=f'{self.sheet_name}!A:N',
@@ -251,6 +251,22 @@ class SheetsService:
                 body=body
             ).execute()
             print(f"✅ Successfully added ticket {ticket_data['ticket_id']} to sheet")
+
+            # Mirror to destination sheet if channel is H- Supply
+            dest_id = os.environ.get('DEST_SPREADSHEET_ID', '').strip()
+            if dest_id and channel_name.strip() == 'H- Supply':
+                try:
+                    self.sheet.values().append(
+                        spreadsheetId=dest_id,
+                        range='Sheet1!A:N',
+                        valueInputOption='RAW',
+                        insertDataOption='INSERT_ROWS',
+                        body=body
+                    ).execute()
+                    print(f"✅ Mirrored ticket {ticket_data['ticket_id']} to destination sheet")
+                except Exception as mirror_err:
+                    print(f"⚠️ Failed to mirror ticket to destination sheet: {mirror_err}")
+
             return True
         except Exception as e:
             print(f"Error appending ticket: {str(e)}")
