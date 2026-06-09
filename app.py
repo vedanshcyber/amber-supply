@@ -934,7 +934,17 @@ def handle_modal_submission_direct(payload):
 
 @app.route("/tickets", methods=["GET"])
 def get_tickets():
-    """API endpoint to get all tickets"""
+    """API endpoint to get all tickets — reads from DEST_SPREADSHEET_ID (H-Supply dashboard sheet)"""
+    dest_id = os.environ.get('DEST_SPREADSHEET_ID', '').strip()
+    if dest_id:
+        from sheets_service import SheetsService
+        credentials_path = os.getenv('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
+        spreadsheet_id = dest_id
+        try:
+            dest_service = SheetsService(credentials_path, spreadsheet_id)
+            return jsonify(dest_service.get_tickets())
+        except Exception as e:
+            logger.error(f"Error reading from DEST_SPREADSHEET_ID: {e}")
     return jsonify(ticket_service.get_all_tickets())
 
 @app.route("/test", methods=["GET"])
