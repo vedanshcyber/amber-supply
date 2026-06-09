@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from datetime import datetime
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -1016,8 +1017,39 @@ def slack_commands():
     """Handle Slack slash commands"""
     return slack_handler.handler.handle(request)
 
+# ── Gmail polling ────────────────────────────────────────────────────────────
+@app.route("/gmail/poll", methods=["POST"])
+def gmail_poll_now():
+    """Manually trigger a Gmail poll (also called by the background thread)."""
+    if not os.environ.get('GMAIL_REFRESH_TOKEN'):
+        return jsonify({"ok": False, "error": "GMAIL_REFRESH_TOKEN not set"}), 503
+    try:
+        from gmail_service import poll_gmail_and_create_tickets
+        created = poll_gmail_and_create_tickets(ticket_service)
+        return jsonify({"ok": True, "tickets_created": created})
+    except Exception as e:
+        logger.error(f"Gmail poll error: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+def _gmail_poll_loop():
+    """Background thread: poll Gmail every 2 minutes."""
+    time.sleep(30)  # wait for app to fully start
+    while True:
+        try:
+            if os.environ.get('GMAIL_REFRESH_TOKEN'):
+                from gmail_service import poll_gmail_and_create_tickets
+                created = poll_gmail_and_create_tickets(ticket_service)
+                if created:
+                    logger.info(f"📧 Gmail poll: {created} new ticket(s) created")
+        except Exception as e:
+            logger.error(f"Gmail background poll error: {e}")
+        time.sleep(120)  # poll every 2 minutes
+
+# Start Gmail background polling thread
+_gmail_thread = threading.Thread(target=_gmail_poll_loop, daemon=True)
+_gmail_thread.start()
+logger.info("📧 Gmail polling thread started (every 2 min)")
+
 if __name__ == "__main__":
-    # Get port from environment variable or use 3000 as default
     port = int(os.environ.get("PORT", 3000))
-    # Run the Flask app
     app.run(host="0.0.0.0", port=port, debug=True)
