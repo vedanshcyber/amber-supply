@@ -51,7 +51,7 @@ def poll_gmail_and_create_tickets(ticket_service):
         created = 0
 
         # Search emails not yet processed by Hubble (read or unread, last 30 days)
-        query = '-label:hubble-processed in:inbox newer_than:30d'
+        query = '-label:hubble-processed newer_than:30d'
         results = service.users().messages().list(
             userId='me', q=query, maxResults=20
         ).execute()
