@@ -50,13 +50,14 @@ def poll_gmail_and_create_tickets(ticket_service):
         service = _get_gmail_service()
         created = 0
 
-        # Search unread emails not yet processed by Hubble
-        query = 'is:unread -label:hubble-processed'
+        # Search emails not yet processed by Hubble (read or unread, last 30 days)
+        query = '-label:hubble-processed in:inbox newer_than:30d'
         results = service.users().messages().list(
             userId='me', q=query, maxResults=20
         ).execute()
 
         messages = results.get('messages', [])
+        logger.info(f"📧 Gmail poll: found {len(messages)} unread message(s) to check")
         if not messages:
             return 0
 
@@ -76,10 +77,12 @@ def poll_gmail_and_create_tickets(ticket_service):
                 body    = _extract_body(msg['payload'])
                 date    = headers.get('date', '')
 
+                logger.info(f"📧 Checking email: subject='{subject}' from='{sender}'")
                 if not _matches_keywords(subject, body):
-                    # Mark as processed so we don't re-check it
+                    logger.info(f"📧 No keyword match — skipping and labelling")
                     _apply_label(service, msg_id, label_id)
                     continue
+                logger.info(f"📧 Keyword match! Creating ticket for: {subject}")
 
                 # Clean sender display name
                 name_match = re.match(r'^"?([^"<]+)"?\s*<?', sender)
@@ -124,8 +127,8 @@ def _ensure_label(service, name):
     return created['id']
 
 def _apply_label(service, msg_id, label_id):
-    """Apply label and mark as read."""
+    """Apply hubble-processed label."""
     service.users().messages().modify(
         userId='me', id=msg_id,
-        body={'addLabelIds': [label_id], 'removeLabelIds': ['UNREAD']}
+        body={'addLabelIds': [label_id]}
     ).execute()
