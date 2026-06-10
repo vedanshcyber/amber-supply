@@ -94,7 +94,8 @@ def poll_gmail_and_create_tickets(ticket_service):
                     timestamp=date,
                     thread_ts=msg_id,
                     channel_id='EMAIL',
-                    priority='Medium'
+                    priority='Medium',
+                    source='Email'
                 )
 
                 if ticket_id:
