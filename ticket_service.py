@@ -25,20 +25,18 @@ class TicketService:
         max_id = max(int(ticket['ticket_id']) for ticket in tickets if ticket['ticket_id'].isdigit())
         return max_id + 1
     
-    def create_ticket(self, message_text, requester_id, requester_name=None, timestamp=None, thread_ts=None, channel_id=None, priority='Medium'):
+    def create_ticket(self, message_text, requester_id, requester_name=None, timestamp=None, thread_ts=None, channel_id=None, priority='Medium', source='Slack'):
         """Create a new ticket with default values"""
         try:
             ticket_id = str(self.next_ticket_id)
             self.next_ticket_id += 1
-            
+
             current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # Store user IDs in custom_fields so modal can pre-fill them
+
             custom_fields = {
-                'requester_id': requester_id,  # Store the actual user ID (U08S2KRG2F9)
+                'requester_id': requester_id,
             }
-            
-            # If default assignee is set, try to extract user ID
+
             default_assignee_name = ''
             try:
                 cfg_map = self.sheets_service.get_channel_config_map()
@@ -46,24 +44,24 @@ class TicketService:
                 default_assignee_name = cfg.get('default_assignee', '').strip()
             except:
                 pass
-            
+
             ticket_data = {
                 'ticket_id': ticket_id,
                 'thread_ts': thread_ts,
                 'channel_id': channel_id,
                 'created_by': requester_id,
-                'requester_name': requester_name or f"@{requester_id}",  # Use real name if provided
-                'status': 'Open',  # Default status is Open
+                'requester_name': requester_name or f"@{requester_id}",
+                'status': 'Open',
                 'priority': priority,
                 'assignee': default_assignee_name,
                 'created_at': current_time,
                 'updated_at': current_time,
                 'resolved_at': '',
                 'description': message_text,
-                'custom_fields': custom_fields  # Pass custom fields for storage
+                'custom_fields': custom_fields
             }
-            
-            success = self.sheets_service.append_ticket(ticket_data)
+
+            success = self.sheets_service.append_ticket(ticket_data, source=source)
             if success:
                 logger.info(f"Created ticket {ticket_id}")
                 return ticket_id
