@@ -336,11 +336,12 @@ class SlackHandler:
                     ticket_id = self.ticket_service.create_ticket(
                         message_text=text,
                         requester_id=user_id,
-                        requester_name=user_name,  # Pass the real name
+                        requester_name=user_name,
                         timestamp=ts,
-                        thread_ts=ts,  # Use the message timestamp as thread_ts for the new thread root
+                        thread_ts=ts,
                         channel_id=channel_id,
-                        priority='Medium'
+                        priority='Medium',
+                        source='Slack'
                     )
                     
                     # Send confirmation message with ticket details in a thread
