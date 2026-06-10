@@ -126,7 +126,8 @@ class SheetsService:
                         'Channel ID',
                         'Channel Name',
                         'Custom Fields (JSON)',
-                        'Internal Message TS'
+                        'Internal Message TS',
+                        'Source'
                     ]
                     
                     # Extend existing headers with missing ones
@@ -162,28 +163,29 @@ class SheetsService:
                     'Channel ID',
                     'Channel Name',
                     'Custom Fields (JSON)',
-                    'Internal Message TS'
+                    'Internal Message TS',
+                    'Source'
                 ]
-                
+
                 body = {
                     'values': [headers]
                 }
-                
+
                 # Only clear the HEADER ROW, not all data
                 self.sheet.values().update(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f'{self.sheet_name}!A1:N1',
+                    range=f'{self.sheet_name}!A1:O1',
                     valueInputOption='RAW',
                     body=body
                 ).execute()
-                
+
                 print("✅ Headers set up successfully")
         except Exception as e:
             print(f"❌ Error setting up headers: {str(e)}")
             # Don't raise - allow app to continue even if header setup fails
             pass
 
-    def append_ticket(self, ticket_data: Dict) -> bool:
+    def append_ticket(self, ticket_data: Dict, source: str = 'Slack') -> bool:
         """
         Append a new ticket to the spreadsheet, checking for duplicates first.
         
@@ -221,20 +223,21 @@ class SheetsService:
         custom_fields_json = json.dumps(custom_fields) if custom_fields else ''
         
         row = [
-            ticket_data.get('ticket_id', ''),           # Ticket ID
-            thread_link,                                 # Thread Link
-            ticket_data.get('requester_name', ticket_data.get('created_by', '')),  # Requester (display name)
-            ticket_data.get('status', 'Open'),          # Status
-            ticket_data.get('priority', 'Medium'),      # Priority
-            default_assignee,                           # Assignee (display name)
-            current_time,                               # Thread Created At TS
-            '',                                         # First Response Time (empty initially)
-            '',                                         # Resolved At (empty initially)
-            ticket_data.get('description', ''),         # Message
-            ticket_data.get('channel_id', ''),          # Channel ID
-            channel_name,                               # Channel Name
-            custom_fields_json,                         # Custom Fields (JSON)
-            ticket_data.get('internal_message_ts', '')  # Internal Message TS
+            ticket_data.get('ticket_id', ''),           # A: Ticket ID
+            thread_link,                                 # B: Thread Link
+            ticket_data.get('requester_name', ticket_data.get('created_by', '')),  # C: Requester
+            ticket_data.get('status', 'Open'),          # D: Status
+            ticket_data.get('priority', 'Medium'),      # E: Priority
+            default_assignee,                           # F: Assignee
+            current_time,                               # G: Thread Created At TS
+            '',                                         # H: First Response Time
+            '',                                         # I: Resolved At
+            ticket_data.get('description', ''),         # J: Message
+            ticket_data.get('channel_id', ''),          # K: Channel ID
+            channel_name,                               # L: Channel Name
+            custom_fields_json,                         # M: Custom Fields (JSON)
+            ticket_data.get('internal_message_ts', ''), # N: Internal Message TS
+            source                                      # O: Source
         ]
 
         body = {
@@ -245,20 +248,23 @@ class SheetsService:
             # Append the row to the primary sheet
             self.sheet.values().append(
                 spreadsheetId=self.spreadsheet_id,
-                range=f'{self.sheet_name}!A:N',
+                range=f'{self.sheet_name}!A:O',
                 valueInputOption='RAW',
                 insertDataOption='INSERT_ROWS',
                 body=body
             ).execute()
-            print(f"✅ Successfully added ticket {ticket_data['ticket_id']} to sheet")
+            print(f"✅ Successfully added ticket {ticket_data['ticket_id']} to sheet (source: {source})")
 
-            # Mirror to destination sheet if channel is H- Supply
+            # Mirror to destination sheet if H-Supply channel OR Gmail source
             dest_id = os.environ.get('DEST_SPREADSHEET_ID', '').strip()
-            if dest_id and channel_name.strip() == 'H- Supply':
+            should_mirror = dest_id and (
+                channel_name.strip() == 'H- Supply' or source == 'Email'
+            )
+            if should_mirror:
                 try:
                     self.sheet.values().append(
                         spreadsheetId=dest_id,
-                        range='Sheet1!A:N',
+                        range='Sheet1!A:O',
                         valueInputOption='RAW',
                         insertDataOption='INSERT_ROWS',
                         body=body
@@ -398,7 +404,7 @@ class SheetsService:
         try:
             result = self.sheet.values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range=f'{self.sheet_name}!A2:N'  # Skip header row, include internal_message_ts column
+                range=f'{self.sheet_name}!A2:O'  # Skip header row, include Source column
             ).execute()
 
             values = result.get('values', [])
@@ -406,8 +412,8 @@ class SheetsService:
 
             for row in values:
                 # Ensure row has all required fields, pad with empty strings if needed
-                row = row + [''] * (14 - len(row))  # Pad row to have 14 columns
-                
+                row = row + [''] * (15 - len(row))  # Pad row to have 15 columns
+
                 if row[0]:  # Only process rows that have a ticket ID
                     ticket_id = row[0].strip()
                     
@@ -427,20 +433,21 @@ class SheetsService:
                     ticket = {
                         'ticket_id': ticket_id,
                         'thread_link': row[1],
-                        'created_by': creator_id,  # User ID for permission checks
-                        'requester_name': row[2],  # Display name for showing
+                        'created_by': creator_id,
+                        'requester_name': row[2],
                         'status': row[3],
                         'priority': row[4],
-                        'assignee': row[5],  # Display name for showing
-                        'assignee_id': assignee_id,  # User ID for permission checks
+                        'assignee': row[5],
+                        'assignee_id': assignee_id,
                         'created_at': row[6],
                         'first_response': row[7],
                         'resolved_at': row[8],
                         'message': row[9],
-                        'channel_id': row[10],           # Channel ID
-                        'channel_name': row[11],         # Channel Name
-                        'internal_message_ts': row[13],  # Internal Message TS
-                        **custom_fields  # Merge custom fields into ticket dict
+                        'channel_id': row[10],
+                        'channel_name': row[11],
+                        'internal_message_ts': row[13],
+                        'source': row[14] if len(row) > 14 else 'Slack',
+                        **custom_fields
                     }
                     # Keep the most recent version (last occurrence)
                     ticket_dict[ticket_id] = ticket
