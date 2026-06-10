@@ -140,7 +140,7 @@ class SheetsService:
                     # Update ONLY the header row, don't touch data
                     self.sheet.values().update(
                         spreadsheetId=self.spreadsheet_id,
-                        range=f'{self.sheet_name}!A1:N1',
+                        range=f'{self.sheet_name}!A1:O1',
                         valueInputOption='RAW',
                         body=body
                     ).execute()
